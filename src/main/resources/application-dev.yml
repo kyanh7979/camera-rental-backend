@@ -1,0 +1,54 @@
+# ============================================
+# DEVELOPMENT PROFILE CONFIGURATION
+# ============================================
+# Use this profile for local development with local MySQL
+# Activate with: --spring.profiles.active=dev
+# Or set SPRING_PROFILES_ACTIVE=dev
+# ============================================
+
+spring:
+  config:
+    activate:
+      on-profile: dev
+
+  # Local MySQL database
+  datasource:
+    url: "${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/camera_rental?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=Asia/Ho_Chi_Minh&allowPublicKeyRetrieval=true&characterEncoding=UTF-8&autoReconnect=true&tcpKeepAlive=true}"
+    username: "${SPRING_DATASOURCE_USERNAME:root}"
+    password: "${SPRING_DATASOURCE_PASSWORD:root}"
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+    # HikariCP for local dev
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 2
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      keepalive-time: 600000
+      validation-timeout: 5000
+      connection-test-query: "SELECT 1"
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    open-in-view: false
+
+  # Local development - show detailed SQL
+  logging:
+    level:
+      root: DEBUG
+      com.camerarental: DEBUG
+      org.springframework.security: DEBUG
+      org.hibernate.SQL: DEBUG
+      org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+
+  # Override app settings for dev
+  app:
+    base-url: "http://localhost:5173"
+    cors:
+      allowed-origins: "http://localhost:5173,http://localhost:3000"
+    storage:
+      local:
+        base-url: "http://localhost:8080/uploads"

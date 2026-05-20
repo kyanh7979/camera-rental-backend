@@ -1,0 +1,153 @@
+# ============================================
+# SPRING BOOT BASE CONFIGURATION
+# ============================================
+# This file contains DEFAULT values for LOCAL DEVELOPMENT
+# All secrets MUST be provided via environment variables or .env file
+# ============================================
+
+server:
+  port: 8080
+  servlet:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+
+spring:
+  config:
+    import: optional:file:.env[.properties]
+
+  # Multipart configuration for file uploads
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 10MB
+      max-request-size: 10MB
+      file-size-threshold: 2KB
+
+  # Database - OVERRIDE via SPRING_DATASOURCE_* env vars
+  datasource:
+    url: "${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/camera_rental?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=Asia/Ho_Chi_Minh&allowPublicKeyRetrieval=true&characterEncoding=UTF-8&autoReconnect=true&tcpKeepAlive=true}"
+    username: "${SPRING_DATASOURCE_USERNAME:root}"
+    password: "${SPRING_DATASOURCE_PASSWORD}"
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+    # HikariCP Connection Pool - Default settings
+    # Override in prod profile for AWS RDS specific tuning
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 300000
+      max-lifetime: 840000
+      keepalive-time: 300000
+      validation-timeout: 5000
+      connection-test-query: "SELECT 1"
+      pool-name: LensRent-HikariPool
+      leak-detection-threshold: 2000
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+
+  # Jackson configuration
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    time-zone: Asia/Ho_Chi_Minh
+
+  # Mail - OVERRIDE via SPRING_MAIL_* env vars
+  mail:
+    host: "${SPRING_MAIL_HOST:smtp.gmail.com}"
+    port: "${SPRING_MAIL_PORT:587}"
+    username: "${SPRING_MAIL_USERNAME}"
+    password: "${SPRING_MAIL_PASSWORD}"
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+
+# ============================================
+# AWS S3 CONFIGURATION
+# ============================================
+aws:
+  access-key-id: "${AWS_ACCESS_KEY_ID}"
+  secret-access-key: "${AWS_SECRET_ACCESS_KEY}"
+  region: "${AWS_REGION:ap-southeast-2}"
+  s3:
+    bucket-name: "${AWS_S3_BUCKET_NAME}"
+    public-base-url: "${AWS_S3_PUBLIC_BASE_URL}"
+    max-size-bytes: "${AWS_S3_MAX_SIZE_BYTES:10485760}"
+
+# ============================================
+# APPLICATION CONFIGURATION
+# ============================================
+app:
+  # JWT Configuration
+  jwt:
+    secret: "${APP_JWT_SECRET}"
+    expiration-ms: "${APP_JWT_EXPIRATION_MS:604800000}"
+
+  # Telegram Bot Configuration
+  telegram:
+    enabled: "${APP_TELEGRAM_ENABLED:true}"
+    polling-enabled: "${APP_TELEGRAM_POLLING_ENABLED:true}"
+    bot-token: "${APP_TELEGRAM_BOT_TOKEN}"
+    chat-id: "${APP_TELEGRAM_CHAT_ID}"
+    warning-enabled: "${APP_TELEGRAM_WARNING_ENABLED:true}"
+    overdue-notification-enabled: "${APP_TELEGRAM_OVERDUE_NOTIFICATION_ENABLED:false}"
+    check-interval-ms: "${APP_TELEGRAM_CHECK_INTERVAL_MS:300000}"
+    overdue-check-interval-ms: "${APP_TELEGRAM_OVERDUE_CHECK_INTERVAL_MS:3600000}"
+    poll-interval-ms: "${APP_TELEGRAM_POLL_INTERVAL_MS:3000}"
+
+  # CORS Configuration
+  cors:
+    allowed-origins: "${APP_CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}"
+
+  # Base URL for frontend
+  base-url: "${APP_BASE_URL:http://localhost:5173}"
+
+  # Local storage fallback configuration
+  storage:
+    local:
+      upload-dir: "${APP_STORAGE_LOCAL_DIR:uploads}"
+      base-url: "${APP_STORAGE_LOCAL_BASE_URL:http://localhost:8080/uploads}"
+
+  # PayOS Payment Configuration
+  payos:
+    api-key: "${PAYOS_API_KEY}"
+    client-id: "${PAYOS_CLIENT_ID}"
+    checksum-key: "${PAYOS_CHECKSUM_KEY}"
+    return-url: "${PAYOS_RETURN_URL:http://localhost:5173/payment-success}"
+    cancel-url: "${PAYOS_CANCEL_URL:http://localhost:5173/payment-cancel}"
+    webhook-url: "${PAYOS_WEBHOOK_URL:https://cobbler-numbing-press.ngrok-free.dev/api/payment/webhook}"
+
+  # Gemini AI Configuration
+  gemini:
+    api-key: "${GEMINI_API_KEY}"
+    model: "${GEMINI_MODEL:gemini-2.0-flash}"
+
+# ============================================
+# LOGGING CONFIGURATION
+# ============================================
+logging:
+  level:
+    root: INFO
+    com.camerarental: DEBUG
+    org.springframework: INFO
+    org.springframework.web: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+    org.springframework.security: INFO
+    vn.payos: DEBUG

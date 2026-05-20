@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trang san pham</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f3f4f6;
+      color: #111827;
+    }
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+    .header {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    .header > * {
+      min-width: 150px;
+    }
+    input, select, button {
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 14px;
+    }
+    input { flex: 1; }
+    select {
+      flex: 0 0 auto;
+      min-width: 160px;
+    }
+    button {
+      background: #2563eb;
+      color: #fff;
+      border: none;
+      cursor: pointer;
+    }
+    .filter-row {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 16px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .filter-row label {
+      font-weight: 600;
+      font-size: 14px;
+    }
+    .filter-row select {
+      min-width: 180px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 14px;
+      background: white;
+    }
+    .filter-row select:focus {
+      outline: none;
+      border-color: #2563eb;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 14px;
+    }
+    .card {
+      background: #fff;
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,.08);
+    }
+    .img-wrap {
+      width: 100%;
+      height: 190px;
+      background: #e5e7eb;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    .img-wrap img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .no-img {
+      color: #6b7280;
+      font-size: 13px;
+    }
+    .content {
+      padding: 12px;
+    }
+    .name {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .meta {
+      color: #4b5563;
+      font-size: 13px;
+      margin-bottom: 6px;
+    }
+    .price {
+      color: #111827;
+      font-weight: 700;
+    }
+    .images-count {
+      margin-top: 6px;
+      font-size: 12px;
+      color: #6b7280;
+    }
+    .status {
+      margin: 10px 0 16px;
+      color: #374151;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>San pham</h1>
+    <div class="filter-row">
+      <label for="brandFilter">Loc theo hang:</label>
+      <select id="brandFilter">
+        <option value="">Tat ca hang</option>
+      </select>
+    </div>
+    <div class="header">
+      <input id="keyword" type="text" placeholder="Tim theo ten/brand...">
+      <button id="btnSearch" type="button">Tim</button>
+    </div>
+    <div id="status" class="status">Dang tai san pham...</div>
+    <div id="productGrid" class="grid"></div>
+  </div>
+
+  <script>
+    const statusEl = document.getElementById("status");
+    const gridEl = document.getElementById("productGrid");
+    const keywordEl = document.getElementById("keyword");
+    const brandFilterEl = document.getElementById("brandFilter");
+
+    function currencyVnd(value) {
+      if (value === null || value === undefined) return "-";
+      return new Intl.NumberFormat("vi-VN").format(value) + " VND";
+    }
+
+    function productCardHtml(item) {
+      const images = Array.isArray(item.images) ? item.images : [];
+      const firstImage = images.length > 0 ? images[0] : null;
+      const brand = item.brand || "N/A";
+      const model = item.model || "N/A";
+      const category = item.category && item.category.name ? item.category.name : "Khong co";
+
+      return `
+        <div class="card">
+          <div class="img-wrap">
+            ${firstImage
+              ? `<img src="${firstImage}" alt="${item.name}" loading="lazy" />`
+              : `<div class="no-img">Chua co anh</div>`
+            }
+          </div>
+          <div class="content">
+            <div class="name">${item.name}</div>
+            <div class="meta">${brand} - ${model}</div>
+            <div class="meta">Danh muc: ${category}</div>
+            <div class="price">${currencyVnd(item.dailyPrice)}/ngay</div>
+            <div class="images-count">So anh: ${images.length}</div>
+          </div>
+        </div>
+      `;
+    }
+
+    async function loadBrands() {
+      try {
+        const res = await fetch("/api/cameras/brands");
+        const payload = await res.json();
+        if (res.ok && payload.success && Array.isArray(payload.data)) {
+          brandFilterEl.innerHTML = '<option value="">Tat ca hang</option>';
+          payload.data.forEach(brand => {
+            const option = document.createElement("option");
+            option.value = brand;
+            option.textContent = brand;
+            brandFilterEl.appendChild(option);
+          });
+        }
+      } catch (e) {
+        console.error("Khong tai duoc danh sach hang:", e);
+      }
+    }
+
+    async function loadProducts() {
+      const keyword = keywordEl.value.trim();
+      const brand = brandFilterEl.value.trim();
+      const query = new URLSearchParams({
+        page: "0",
+        size: "20",
+        sortBy: "createdAt",
+        sortDir: "desc"
+      });
+      if (keyword) query.append("keyword", keyword);
+      if (brand) query.append("brand", brand);
+
+      statusEl.textContent = "Dang tai san pham...";
+      gridEl.innerHTML = "";
+
+      try {
+        const res = await fetch("/api/cameras?" + query.toString());
+        const payload = await res.json();
+
+        if (!res.ok || !payload.success) {
+          throw new Error(payload.message || "Khong tai duoc san pham");
+        }
+
+        const page = payload.data;
+        const products = page && Array.isArray(page.content) ? page.content : [];
+
+        if (products.length === 0) {
+          statusEl.textContent = "Khong co san pham nao.";
+          return;
+        }
+
+        gridEl.innerHTML = products.map(productCardHtml).join("");
+        statusEl.textContent = `Da tai ${products.length}/${page.totalElements} san pham.`;
+      } catch (error) {
+        statusEl.textContent = "Loi: " + error.message;
+      }
+    }
+
+    document.getElementById("btnSearch").addEventListener("click", loadProducts);
+    keywordEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") loadProducts();
+    });
+    brandFilterEl.addEventListener("change", loadProducts);
+
+    loadBrands();
+    loadProducts();
+  </script>
+</body>
+</html>

@@ -1,0 +1,159 @@
+# ============================================
+# PRODUCTION PROFILE CONFIGURATION
+# ============================================
+# Use this profile for PRODUCTION deployment on AWS EC2
+# Activate with: --spring.profiles.active=prod
+# Or set SPRING_PROFILES_ACTIVE=prod
+# ============================================
+# ALL VALUES ARE REQUIRED - No hardcoded fallbacks allowed
+# ============================================
+
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+  # ============================================
+  # DATABASE - REQUIRED (Optimized for AWS RDS MySQL)
+  # ============================================
+  datasource:
+    url: "${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/camera_rental?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=Asia/Ho_Chi_Minh&allowPublicKeyRetrieval=true&characterEncoding=UTF-8&autoReconnect=true&tcpKeepAlive=true}"
+    username: "${SPRING_DATASOURCE_USERNAME}"
+    password: "${SPRING_DATASOURCE_PASSWORD}"
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+    # HikariCP Connection Pool - Optimized for AWS RDS
+    hikari:
+      # Pool size - adjust based on expected concurrent connections
+      maximum-pool-size: 10
+      minimum-idle: 5
+
+      # Timeouts (in milliseconds)
+      # connection-timeout: Time to wait for a connection from pool
+      connection-timeout: 30000
+
+      # idle-timeout: Max time a connection can be idle before removal
+      # Must be less than AWS RDS wait_timeout (default 10 min = 600000ms)
+      idle-timeout: 300000
+
+      # max-lifetime: Max lifetime of a connection before removal
+      # MUST be less than AWS RDS wait_timeout (10 min = 600000ms)
+      # Recommended: 14 minutes (840000ms) to be safe
+      max-lifetime: 840000
+
+      # keepalive-time: Heartbeat to prevent connection timeout
+      # Must be less than AWS RDS wait_timeout
+      keepalive-time: 300000
+
+      # validation-timeout: Time to validate connection during checkout
+      validation-timeout: 5000
+
+      # connection-test-query: Query to test connection health (MySQL specific)
+      connection-test-query: "SELECT 1"
+
+      # Pool name for debugging
+      pool-name: LensRent-HikariPool
+
+      # Leak detection - warn if connection borrowed > 2 seconds
+      leak-detection-threshold: 2000
+
+  # ============================================
+  # JPA/HIBERNATE
+  # ============================================
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: false
+
+  # ============================================
+  # MAIL - REQUIRED
+  # ============================================
+  mail:
+    host: "${SPRING_MAIL_HOST}"
+    port: "${SPRING_MAIL_PORT:587}"
+    username: "${SPRING_MAIL_USERNAME}"
+    password: "${SPRING_MAIL_PASSWORD}"
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          connectiontimeout: 10000
+          timeout: 10000
+          writetimeout: 10000
+
+# ============================================
+# AWS S3 CONFIGURATION - REQUIRED FOR PRODUCTION
+# ============================================
+aws:
+  access-key-id: "${AWS_ACCESS_KEY_ID}"
+  secret-access-key: "${AWS_SECRET_ACCESS_KEY}"
+  region: "${AWS_REGION:ap-southeast-2}"
+  s3:
+    bucket-name: "${AWS_S3_BUCKET_NAME}"
+    public-base-url: "${AWS_S3_PUBLIC_BASE_URL}"
+    max-size-bytes: "${AWS_S3_MAX_SIZE_BYTES:10485760}"
+
+# ============================================
+# APPLICATION CONFIGURATION - REQUIRED
+# ============================================
+app:
+  # JWT - REQUIRED
+  jwt:
+    secret: "${APP_JWT_SECRET}"
+    expiration-ms: "${APP_JWT_EXPIRATION_MS:604800000}"
+
+  # Telegram - REQUIRED FOR NOTIFICATIONS
+  telegram:
+    bot-token: "${APP_TELEGRAM_BOT_TOKEN}"
+    chat-id: "${APP_TELEGRAM_CHAT_ID}"
+    warning-enabled: "${APP_TELEGRAM_WARNING_ENABLED:true}"
+    check-interval-ms: "${APP_TELEGRAM_CHECK_INTERVAL_MS:300000}"
+
+  # CORS - PRODUCTION DOMAIN
+  cors:
+    allowed-origins: "${APP_CORS_ALLOWED_ORIGINS}"
+
+  # Base URL - PRODUCTION DOMAIN
+  base-url: "${APP_BASE_URL}"
+
+  # Local storage (fallback if S3 not used)
+  storage:
+    local:
+      upload-dir: "${APP_STORAGE_LOCAL_DIR:uploads}"
+      base-url: "${APP_STORAGE_LOCAL_BASE_URL}"
+
+  # PayOS - REQUIRED FOR PAYMENT
+  payos:
+    api-key: "${PAYOS_API_KEY}"
+    client-id: "${PAYOS_CLIENT_ID}"
+    checksum-key: "${PAYOS_CHECKSUM_KEY}"
+    return-url: "${PAYOS_RETURN_URL}"
+    cancel-url: "${PAYOS_CANCEL_URL}"
+    webhook-url: "${PAYOS_WEBHOOK_URL}"
+
+  # Gemini AI - REQUIRED FOR AI CHAT
+  gemini:
+    api-key: "${GEMINI_API_KEY}"
+    model: "${GEMINI_MODEL:gemini-2.0-flash}"
+
+# ============================================
+# LOGGING - PRODUCTION SETTINGS
+# ============================================
+logging:
+  level:
+    root: INFO
+    "com.camerarental": INFO
+    "org.springframework": WARN
+    "org.springframework.web": WARN
+    "org.hibernate.SQL": WARN
+    "org.springframework.security": WARN
+    "vn.payos": INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"

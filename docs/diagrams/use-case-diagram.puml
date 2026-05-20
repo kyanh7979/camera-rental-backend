@@ -1,0 +1,135 @@
+@startuml "UseCase_ChoThueMayAnh"
+skinparam backgroundColor #FEFEFE
+skinparam packageStyle rectangle
+
+title Sơ đồ Use Case - Hệ thống Cho Thuê Máy Ảnh
+
+left to right direction
+
+' ========== ACTORS ==========
+actor "Khách hàng" as GUEST
+actor "Người dùng" as USER
+actor "Quản trị viên" as ADMIN
+
+' ========== PACKAGES ==========
+package "Quản lý Tài khoản" {
+  usecase "UC1: Đăng ký tài khoản" as UC1
+  usecase "UC2: Đăng nhập" as UC2
+  usecase "UC3: Đăng xuất" as UC3
+  usecase "UC4: Quản lý hồ sơ" as UC4
+  usecase "UC5: Đổi mật khẩu" as UC5
+  usecase "UC6: Quên mật khẩu" as UC6
+}
+
+package "Quản lý Sản phẩm" {
+  usecase "UC7: Xem danh sách sản phẩm" as UC7
+  usecase "UC8: Tìm kiếm sản phẩm" as UC8
+  usecase "UC9: Lọc sản phẩm theo hãng" as UC9
+  usecase "UC10: Xem chi tiết sản phẩm" as UC10
+  usecase "UC11: Thêm sản phẩm mới" as UC11
+  usecase "UC12: Cập nhật sản phẩm" as UC12
+  usecase "UC13: Xóa sản phẩm" as UC13
+  usecase "UC14: Upload ảnh sản phẩm" as UC14
+}
+
+package "Quản lý Danh mục" {
+  usecase "UC15: Xem danh sách danh mục" as UC15
+  usecase "UC16: Thêm danh mục mới" as UC16
+  usecase "UC17: Cập nhật danh mục" as UC17
+  usecase "UC18: Xóa danh mục" as UC18
+}
+
+package "Quản lý Đơn hàng" {
+  usecase "UC19: Tạo đơn thuê" as UC19
+  usecase "UC20: Xem lịch sử đơn hàng" as UC20
+  usecase "UC21: Hủy đơn hàng" as UC21
+  usecase "UC22: Xem chi tiết đơn hàng" as UC22
+  usecase "UC23: Cập nhật trạng thái đơn" as UC23
+}
+
+package "Quản lý Thanh toán" {
+  usecase "UC24: Thanh toán đơn hàng" as UC24
+  usecase "UC25: Xem thông tin thanh toán" as UC25
+  usecase "UC26: Xác nhận thanh toán" as UC26
+}
+
+package "Quản lý Đánh giá" {
+  usecase "UC27: Đánh giá sản phẩm" as UC27
+  usecase "UC28: Xem đánh giá sản phẩm" as UC28
+}
+
+package "Dashboard & Báo cáo" {
+  usecase "UC29: Xem thống kê dashboard" as UC29
+  usecase "UC30: Gửi thông báo Telegram" as UC30
+}
+
+' ========== ACTOR - USE CASE RELATIONSHIPS ==========
+
+' Khách hàng (chưa đăng nhập)
+GUEST --> UC1
+GUEST --> UC2
+GUEST --> UC7
+GUEST --> UC8
+GUEST --> UC10
+GUEST --> UC28
+
+' Người dùng (đã đăng nhập)
+USER --> UC3
+USER --> UC4
+USER --> UC5
+USER <|-- GUEST
+
+USER --> UC19
+USER --> UC20
+USER --> UC21
+USER --> UC22
+USER --> UC24
+USER --> UC25
+USER --> UC27
+
+' Quản trị viên
+ADMIN --> UC3
+ADMIN --> UC4
+ADMIN --> UC5
+ADMIN <|-- USER
+
+ADMIN --> UC11
+ADMIN --> UC12
+ADMIN --> UC13
+ADMIN --> UC14
+
+ADMIN --> UC16
+ADMIN --> UC17
+ADMIN --> UC18
+
+ADMIN --> UC23
+ADMIN --> UC26
+
+ADMIN --> UC29
+ADMIN --> UC30
+
+' ========== USE CASE INCLUDES ==========
+
+UC7 ..> UC8 : <<include>>
+UC7 ..> UC9 : <<include>>
+UC10 ..> UC28 : <<include>>
+UC19 ..> UC24 : <<include>>
+
+' ========== NOTES ==========
+
+note top of UC7
+  Hiển thị sản phẩm
+  theo phân trang
+end note
+
+note bottom of UC11
+  Admin nhập thông tin
+  và upload ảnh lên S3
+end note
+
+note right of UC24
+  Hỗ trợ nhiều
+  phương thức thanh toán
+end note
+
+@enduml
