@@ -146,17 +146,57 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public String forgotPassword(ForgotPasswordRequest request) {
-        userRepository.findByEmail(request.getEmail()).ifPresent(user -> {
-            String token = UUID.randomUUID().toString();
-            user.setResetPasswordToken(token);
-            user.setResetPasswordExpiry(LocalDateTime.now().plusHours(1));
-            userRepository.save(user);
+        String email = request.getEmail();
+        log.info("[FORGOT_PASSWORD] === FORGOT PASSWORD REQUEST ===");
+        log.info("[FORGOT_PASSWORD] incoming email: {}", email);
 
-            String resetLink = baseUrl + "/reset-password?token=" + token;
+        if (email == null || email.trim().isEmpty()) {
+            log.warn("[FORGOT_PASSWORD] Email is null or empty");
+            throw new BadRequestException("Email is required");
+        }
+
+        String trimmedEmail = email.trim().toLowerCase();
+        log.info("[FORGOT_PASSWORD] Looking up user with email: {}", trimmedEmail);
+
+        User user = userRepository.findByEmail(trimmedEmail).orElse(null);
+
+        if (user == null) {
+            log.warn("[FORGOT_PASSWORD] User not found for email: {}", trimmedEmail);
+            // Always return same message to prevent email enumeration
+            return "If that email exists in our system, a password reset link has been sent.";
+        }
+
+        log.info("[FORGOT_PASSWORD] User found: id={}, email={}, name={}",
+                user.getId(), user.getEmail(), user.getFullName());
+
+        // Generate reset token
+        String token = UUID.randomUUID().toString();
+        log.info("[FORGOT_PASSWORD] Generated reset token: {}", token.substring(0, 8) + "...");
+
+        user.setResetPasswordToken(token);
+        user.setResetPasswordExpiry(LocalDateTime.now().plusHours(1));
+        userRepository.save(user);
+        log.info("[FORGOT_PASSWORD] Token saved to database for user: {}", user.getId());
+
+        // Build reset link with production base URL
+        String resetLink = baseUrl + "/reset-password?token=" + token;
+        log.info("[FORGOT_PASSWORD] Reset link: {}", resetLink);
+        log.info("[FORGOT_PASSWORD] Base URL used: {}", baseUrl);
+
+        // Send email - MUST succeed
+        log.info("[FORGOT_PASSWORD] Attempting to send email to: {}", user.getEmail());
+        try {
             emailService.sendPasswordResetEmail(user.getEmail(), resetLink);
-            log.info("Password reset email queued for: {}", user.getEmail());
-        });
-        // Luôn trả message giống nhau — không tiết lộ email có tồn tại hay không
+            log.info("[FORGOT_PASSWORD] Email send initiated successfully for: {}", user.getEmail());
+        } catch (Exception e) {
+            log.error("[FORGOT_PASSWORD] FAILED to send email to: {}", user.getEmail(), e);
+            log.error("[FORGOT_PASSWORD] Email error: {}", e.getMessage());
+            // Propagate error - DO NOT return success if email fails
+            throw new RuntimeException("Failed to send password reset email. Please try again later.", e);
+        }
+
+        log.info("[FORGOT_PASSWORD] === FORGOT PASSWORD COMPLETED ===");
+        // Return generic message for security (prevent email enumeration)
         return "If that email exists in our system, a password reset link has been sent.";
     }
 
