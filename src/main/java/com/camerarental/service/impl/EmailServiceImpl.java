@@ -9,7 +9,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.MailException;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -22,13 +21,20 @@ public class EmailServiceImpl implements EmailService {
     @Value("${spring.mail.username:noreply@lensrent.com}")
     private String fromEmail;
 
+    @Value("${spring.mail.host:smtp.gmail.com}")
+    private String mailHost;
+
+    @Value("${spring.mail.port:587}")
+    private int mailPort;
+
     @Override
-    @Async
     public void sendPasswordResetEmail(String to, String resetLink) {
         log.info("[FORGOT_PASSWORD] === EMAIL SERVICE START ===");
         log.info("[FORGOT_PASSWORD] incoming email: {}", to);
         log.info("[FORGOT_PASSWORD] reset link: {}", resetLink);
         log.info("[FORGOT_PASSWORD] from email: {}", fromEmail);
+        log.info("[FORGOT_PASSWORD] mail host: {}", mailHost);
+        log.info("[FORGOT_PASSWORD] mail port: {}", mailPort);
 
         try {
             MimeMessage message = mailSender.createMimeMessage();
