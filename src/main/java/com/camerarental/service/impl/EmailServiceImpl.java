@@ -1,72 +1,102 @@
 package com.camerarental.service.impl;
 
 import com.camerarental.service.EmailService;
-import jakarta.mail.MessagingException;
-import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.MailException;
-import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.mail.javamail.MimeMessageHelper;
+import org.springframework.http.*;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestTemplate;
+
+import java.util.HashMap;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class EmailServiceImpl implements EmailService {
 
-    private final JavaMailSender mailSender;
+    private static final String BREVO_API_URL = "https://api.brevo.com/v3/smtp/email";
 
-    @Value("${spring.mail.username:noreply@lensrent.com}")
-    private String fromEmail;
+    private final RestTemplate restTemplate;
 
-    @Value("${spring.mail.host:smtp.gmail.com}")
-    private String mailHost;
+    @Value("${brevo.sender.email:noreply@lensrent.com}")
+    private String senderEmail;
 
-    @Value("${spring.mail.port:587}")
-    private int mailPort;
+    @Value("${brevo.sender.name:LensRent}")
+    private String senderName;
+
+    @Value("${brevo.api.key}")
+    private String brevoApiKey;
 
     @Override
     public void sendPasswordResetEmail(String to, String resetLink) {
-        log.info("[FORGOT_PASSWORD] === EMAIL SERVICE START ===");
+        log.info("[FORGOT_PASSWORD] === BREVO EMAIL SERVICE START ===");
         log.info("[FORGOT_PASSWORD] incoming email: {}", to);
         log.info("[FORGOT_PASSWORD] reset link: {}", resetLink);
-        log.info("[FORGOT_PASSWORD] from email: {}", fromEmail);
-        log.info("[FORGOT_PASSWORD] mail host: {}", mailHost);
-        log.info("[FORGOT_PASSWORD] mail port: {}", mailPort);
+        log.info("[FORGOT_PASSWORD] sender: {} <{}>", senderName, senderEmail);
 
         try {
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            // Build Brevo API request body
+            Map<String, Object> requestBody = new HashMap<>();
 
-            helper.setFrom(fromEmail);
-            helper.setTo(to);
-            helper.setSubject("Đặt lại mật khẩu - LensRent");
+            // Subject
+            requestBody.put("subject", "Đặt lại mật khẩu - LensRent");
 
-            String htmlContent = buildPasswordResetEmailHtml(resetLink);
-            helper.setText(htmlContent, true);
+            // Sender
+            Map<String, String> sender = new HashMap<>();
+            sender.put("name", senderName);
+            sender.put("email", senderEmail);
+            requestBody.put("sender", sender);
 
-            log.info("[FORGOT_PASSWORD] sending email to: {}", to);
-            mailSender.send(message);
-            log.info("[FORGOT_PASSWORD] email sent successfully to: {}", to);
-            log.info("[FORGOT_PASSWORD] === EMAIL SERVICE END (SUCCESS) ===");
+            // Recipient
+            Map<String, String> recipient = new HashMap<>();
+            recipient.put("email", to);
+            requestBody.put("to", new Map[]{recipient});
 
-        } catch (MailException e) {
-            log.error("[FORGOT_PASSWORD] MailException while sending to: {}", to, e);
-            log.error("[FORGOT_PASSWORD] Mail error message: {}", e.getMessage());
-            log.error("[FORGOT_PASSWORD] === EMAIL SERVICE END (MAIL ERROR) ===");
-            throw new RuntimeException("Failed to send password reset email: " + e.getMessage(), e);
-        } catch (MessagingException e) {
-            log.error("[FORGOT_PASSWORD] MessagingException while sending to: {}", to, e);
-            log.error("[FORGOT_PASSWORD] Messaging error message: {}", e.getMessage());
-            log.error("[FORGOT_PASSWORD] === EMAIL SERVICE END (MESSAGING ERROR) ===");
-            throw new RuntimeException("Failed to create email message: " + e.getMessage(), e);
+            // HTML content
+            requestBody.put("htmlContent", buildPasswordResetEmailHtml(resetLink));
+
+            log.info("[FORGOT_PASSWORD] Sending request to Brevo API...");
+            log.info("[FORGOT_PASSWORD] API endpoint: {}", BREVO_API_URL);
+
+            // Set headers
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.set("api-key", brevoApiKey);
+
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
+
+            // Call Brevo API
+            ResponseEntity<String> response = restTemplate.exchange(
+                    BREVO_API_URL,
+                    HttpMethod.POST,
+                    entity,
+                    String.class
+            );
+
+            if (response.getStatusCode().is2xxSuccessful()) {
+                log.info("[FORGOT_PASSWORD] Email sent successfully to: {}", to);
+                log.info("[FORGOT_PASSWORD] Response status: {}", response.getStatusCode());
+                log.info("[FORGOT_PASSWORD] === BREVO EMAIL SERVICE END (SUCCESS) ===");
+            } else {
+                log.error("[FORGOT_PASSWORD] Email send failed - Status: {}", response.getStatusCode());
+                log.error("[FORGOT_PASSWORD] Response body: {}", response.getBody());
+                log.error("[FORGOT_PASSWORD] === BREVO EMAIL SERVICE END (FAILED) ===");
+                throw new RuntimeException("Failed to send email via Brevo API. Status: " + response.getStatusCode());
+            }
+
+        } catch (RestClientException e) {
+            log.error("[FORGOT_PASSWORD] RestClientException while sending to: {}", to, e);
+            log.error("[FORGOT_PASSWORD] Error message: {}", e.getMessage());
+            log.error("[FORGOT_PASSWORD] === BREVO EMAIL SERVICE END (REST ERROR) ===");
+            throw new RuntimeException("Failed to send password reset email via Brevo API: " + e.getMessage(), e);
         } catch (Exception e) {
             log.error("[FORGOT_PASSWORD] Unexpected error while sending to: {}", to, e);
-            log.error("[FORGOT_PASSWORD] Unexpected error message: {}", e.getMessage());
+            log.error("[FORGOT_PASSWORD] Error message: {}", e.getMessage());
             log.error("[FORGOT_PASSWORD] Stack trace: ", e);
-            log.error("[FORGOT_PASSWORD] === EMAIL SERVICE END (UNEXPECTED ERROR) ===");
+            log.error("[FORGOT_PASSWORD] === BREVO EMAIL SERVICE END (UNEXPECTED ERROR) ===");
             throw new RuntimeException("Failed to send password reset email: " + e.getMessage(), e);
         }
     }

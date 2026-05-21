@@ -139,6 +139,16 @@ app:
     model: "${GEMINI_MODEL:gemini-2.0-flash}"
 
 # ============================================
+# BREVO EMAIL CONFIGURATION
+# ============================================
+brevo:
+  api:
+    key: "${BREVO_API_KEY}"
+  sender:
+    email: "${BREVO_SENDER_EMAIL:noreply@lensrent.com}"
+    name: "${BREVO_SENDER_NAME:LensRent}"
+
+# ============================================
 # LOGGING CONFIGURATION
 # ============================================
 logging:
