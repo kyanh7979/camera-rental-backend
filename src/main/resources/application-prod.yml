@@ -127,7 +127,7 @@ app:
   storage:
     local:
       upload-dir: "${APP_STORAGE_LOCAL_DIR:uploads}"
-      base-url: "${APP_STORAGE_LOCAL_BASE_URL}"
+      base-url: "${APP_STORAGE_LOCAL_BASE_URL:${app.base-url}/uploads}"
 
   # PayOS - REQUIRED FOR PAYMENT
   payos:
