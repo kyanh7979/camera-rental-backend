@@ -1,6 +1,7 @@
 package com.camerarental.entity;
 
 import com.camerarental.entity.enums.Role;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -27,6 +28,7 @@ public class User {
     @Column(nullable = false, unique = true)
     private String email;
 
+    @JsonIgnore
     @Column(nullable = false)
     private String password;
 
@@ -44,8 +46,10 @@ public class User {
     @Builder.Default
     private Boolean isActive = true;
 
+    @JsonIgnore
     private String resetPasswordToken;
 
+    @JsonIgnore
     private LocalDateTime resetPasswordExpiry;
 
     @CreationTimestamp

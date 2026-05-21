@@ -1,5 +1,6 @@
 package com.camerarental.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -16,6 +17,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class Review {
 
     @Id
@@ -24,10 +26,12 @@ public class Review {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
+    @JsonIgnoreProperties({"password", "email", "phone", "address", "avatar", "role", "isActive", "resetPasswordToken", "resetPasswordExpiry", "createdAt", "updatedAt", "telegramChatId", "hibernateLazyInitializer", "handler"})
     private User user;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "camera_id", nullable = false)
+    @JsonIgnoreProperties({"category", "images", "sampleImages", "specifications", "hibernateLazyInitializer", "handler"})
     private Camera camera;
 
     @Column(nullable = false)

@@ -14,6 +14,7 @@ import com.camerarental.repository.ReviewRepository;
 import com.camerarental.repository.UserRepository;
 import com.camerarental.service.ReviewService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -21,6 +22,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ReviewServiceImpl implements ReviewService {
@@ -32,6 +34,7 @@ public class ReviewServiceImpl implements ReviewService {
     @Override
     @Transactional
     public ReviewResponse createReview(String email, ReviewRequest request) {
+        log.info("Creating review for camera {} by user {}", request.getCameraId(), email);
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "email", email));
         Camera camera = cameraRepository.findById(request.getCameraId())
@@ -54,6 +57,7 @@ public class ReviewServiceImpl implements ReviewService {
     @Override
     @Transactional
     public ReviewResponse updateReview(Long id, String email, ReviewRequest request) {
+        log.info("Updating review {} by user {}", id, email);
         Review review = reviewRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Review", "id", id));
 
@@ -69,6 +73,7 @@ public class ReviewServiceImpl implements ReviewService {
     @Override
     @Transactional
     public void deleteReview(Long id, String email) {
+        log.info("Deleting review {} by user {}", id, email);
         Review review = reviewRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Review", "id", id));
 
@@ -80,9 +85,12 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public PagedResponse<ReviewResponse> getReviewsByCamera(Long cameraId, int page, int size) {
+        log.info("Fetching reviews for camera: {}, page: {}, size: {}", cameraId, page, size);
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
         Page<Review> reviews = reviewRepository.findByCameraId(cameraId, pageable);
+        log.info("Found {} reviews for camera {}", reviews.getTotalElements(), cameraId);
 
         return PagedResponse.<ReviewResponse>builder()
                 .content(reviews.getContent().stream().map(ReviewResponse::fromEntity).toList())
