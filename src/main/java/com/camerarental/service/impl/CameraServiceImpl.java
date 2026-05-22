@@ -371,40 +371,115 @@ public class CameraServiceImpl implements CameraService {
         return cameras.stream().map(CameraResponse::fromEntity).toList();
     }
 
+    private static final List<OrderStatus> BLOCKING_STATUSES = List.of(
+            OrderStatus.PENDING,
+            OrderStatus.CONFIRMED,
+            OrderStatus.PAID,
+            OrderStatus.RENTING,
+            OrderStatus.RETURNED
+    );
+
+    private static final List<OrderStatus> TERMINAL_STATUSES = List.of(
+            OrderStatus.COMPLETED,
+            OrderStatus.CANCELLED
+    );
+
     @Override
     @Transactional
     public void deleteCamera(Long id) {
-        log.info("[CameraService] deleteCamera called - id={}", id);
+        log.info("[DELETE_CAMERA] cameraId={}", id);
 
         Camera camera = cameraRepository.findByIdAndDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Camera", "id", id));
 
         // Check if already deleted
         if (Boolean.TRUE.equals(camera.getDeleted())) {
-            log.warn("[CameraService] Camera already deleted: id={}", id);
+            log.warn("[DELETE_CAMERA] cameraId={} - already deleted", id);
             throw new BadRequestException("Sản phẩm đã được xóa trước đó");
         }
 
-        // Check if camera has active rental orders - block only this
-        long activeOrderCount = rentalOrderRepository.countActiveOrdersByCameraId(
-                id,
-                java.util.List.of(
-                        OrderStatus.PENDING,
-                        OrderStatus.CONFIRMED,
-                        OrderStatus.RENTING
-                )
-        );
-        if (activeOrderCount > 0) {
-            log.warn("[CameraService] Cannot delete camera with active orders: id={}, orderCount={}", id, activeOrderCount);
-            throw new BadRequestException(
-                    "Không thể xóa sản phẩm đang có " + activeOrderCount + " đơn thuê đang hoạt động. Vui lòng hoàn thành hoặc hủy đơn trước.");
+        // Get ALL linked orders for this camera
+        List<Object[]> allOrderInfos = rentalOrderRepository.findAllOrderInfoByCameraId(id);
+        int totalLinkedOrders = allOrderInfos.size();
+
+        log.info("[DELETE_CAMERA] cameraId={}, cameraName={}, totalLinkedOrders={}",
+                id, camera.getName(), totalLinkedOrders);
+
+        // Case A: No linked orders at all → HARD DELETE
+        if (totalLinkedOrders == 0) {
+            log.info("[DELETE_CAMERA] cameraId={} - Case A: no linked orders, hard delete", id);
+
+            // Delete images
+            if (camera.getImages() != null && !camera.getImages().isEmpty()) {
+                camera.getImages().clear();
+            }
+            // Delete sample images
+            if (camera.getSampleImages() != null && !camera.getSampleImages().isEmpty()) {
+                camera.getSampleImages().clear();
+            }
+            cameraRepository.delete(camera);
+
+            log.info("[DELETE_CAMERA] cameraId={} - HARD DELETED", id);
+            return;
         }
 
-        // SOFT DELETE - always allowed if no active orders
+        // Separate orders into blocking vs terminal
+        List<Object[]> blockingOrders = new java.util.ArrayList<>();
+        List<Object[]> terminalOrders = new java.util.ArrayList<>();
+
+        for (Object[] orderInfo : allOrderInfos) {
+            OrderStatus status = (OrderStatus) orderInfo[2];
+            if (TERMINAL_STATUSES.contains(status)) {
+                terminalOrders.add(orderInfo);
+            } else {
+                blockingOrders.add(orderInfo);
+            }
+        }
+
+        log.info("[DELETE_CAMERA] cameraId={}, blockingOrders={}, terminalOrders={}",
+                id, blockingOrders.size(), terminalOrders.size());
+
+        // Case C: Has blocking orders → BLOCK DELETE
+        if (!blockingOrders.isEmpty()) {
+            List<String> blockingCodes = blockingOrders.stream()
+                    .map(o -> (String) o[1] + " (" + ((OrderStatus) o[2]).name() + ")")
+                    .toList();
+
+            log.warn("[DELETE_CAMERA] cameraId={} - Case C: blocked by {} orders: {}",
+                    id, blockingOrders.size(), blockingCodes);
+
+            // Build user-friendly message with statuses
+            long pending = blockingOrders.stream().filter(o -> o[2] == OrderStatus.PENDING).count();
+            long confirmed = blockingOrders.stream().filter(o -> o[2] == OrderStatus.CONFIRMED).count();
+            long paid = blockingOrders.stream().filter(o -> o[2] == OrderStatus.PAID).count();
+            long renting = blockingOrders.stream().filter(o -> o[2] == OrderStatus.RENTING).count();
+            long returned = blockingOrders.stream().filter(o -> o[2] == OrderStatus.RETURNED).count();
+
+            StringBuilder msg = new StringBuilder();
+            msg.append("Không thể xóa sản phẩm vì có ").append(blockingOrders.size())
+                    .append(" đơn thuê đang chặn:\n");
+
+            if (pending > 0) msg.append("- ").append(pending).append(" đơn Chờ xác nhận (PENDING)\n");
+            if (confirmed > 0) msg.append("- ").append(confirmed).append(" đơn Đã xác nhận (CONFIRMED)\n");
+            if (paid > 0) msg.append("- ").append(paid).append(" đơn Đã thanh toán (PAID)\n");
+            if (renting > 0) msg.append("- ").append(renting).append(" đơn Đang thuê (RENTING)\n");
+            if (returned > 0) {
+                msg.append("- ").append(returned)
+                        .append(" đơn Đã trả (RETURNED) - cần hoàn tất đơn trước\n");
+            }
+            msg.append("Vui lòng xử lý các đơn trên trước.");
+
+            throw new BadRequestException(msg.toString());
+        }
+
+        // Case B: All linked orders are COMPLETED/CANCELLED → SOFT DELETE
+        log.info("[DELETE_CAMERA] cameraId={} - Case B: all orders are terminal, soft delete", id);
+
         camera.setDeleted(true);
         camera.setIsActive(false);
         cameraRepository.save(camera);
 
-        log.info("[CameraService] Soft deleted camera: id={}, name={}", id, camera.getName());
+        log.info("[DELETE_CAMERA] cameraId={} - SOFT DELETED (hidden), terminalOrders={}",
+                id, terminalOrders.size());
     }
 }

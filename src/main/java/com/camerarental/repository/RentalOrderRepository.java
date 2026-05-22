@@ -52,6 +52,21 @@ public interface RentalOrderRepository extends JpaRepository<RentalOrder, Long> 
     @Query("SELECT COUNT(DISTINCT o.id) FROM RentalOrder o JOIN RentalOrderItem oi ON o.id = oi.order.id WHERE oi.camera.id = :cameraId AND o.status IN :statuses")
     long countActiveOrdersByCameraId(@Param("cameraId") Long cameraId, @Param("statuses") List<OrderStatus> statuses);
 
+    /**
+     * Get all orders linked to a camera with their statuses (for delete decision).
+     * Returns: [orderId, orderCode, status]
+     */
+    @Query("SELECT o.id, o.orderCode, o.status FROM RentalOrder o JOIN RentalOrderItem oi ON o.id = oi.order.id WHERE oi.camera.id = :cameraId ORDER BY o.createdAt DESC")
+    List<Object[]> findAllOrderInfoByCameraId(@Param("cameraId") Long cameraId);
+
+    /**
+     * Get all active orders blocking camera deletion.
+     * Active = PENDING, CONFIRMED, PAID, RENTING, RETURNED
+     * Non-active = COMPLETED, CANCELLED
+     */
+    @Query("SELECT o.id, o.orderCode, o.status FROM RentalOrder o JOIN RentalOrderItem oi ON o.id = oi.order.id WHERE oi.camera.id = :cameraId AND o.status IN :activeStatuses ORDER BY o.createdAt DESC")
+    List<Object[]> findBlockingOrdersByCameraId(@Param("cameraId") Long cameraId, @Param("activeStatuses") List<OrderStatus> activeStatuses);
+
     List<RentalOrder> findTop5ByOrderByCreatedAtDesc();
 
     List<RentalOrder> findTop10ByStatusOrderByCreatedAtDesc(OrderStatus status);
