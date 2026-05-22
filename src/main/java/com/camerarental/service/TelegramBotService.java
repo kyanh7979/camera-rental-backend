@@ -57,16 +57,20 @@ public class TelegramBotService {
      * Send reply to specific chat - auto splits if too long
      */
     public void sendReply(String targetChatId, String message) {
+        if (botToken == null || botToken.isBlank()) {
+            log.warn("[TELEGRAM] BOT_TOKEN missing (APP_TELEGRAM_BOT_TOKEN env var not set). Skipping notification.");
+            return;
+        }
+        if (chatId == null || chatId.isBlank()) {
+            log.warn("[TELEGRAM] CHAT_ID missing (APP_TELEGRAM_CHAT_ID env var not set). Skipping notification.");
+            return;
+        }
         if (targetChatId == null || targetChatId.isBlank()) {
             log.warn("[TELEGRAM] Cannot send: targetChatId is null/blank");
             return;
         }
         if (message == null || message.isBlank()) {
             log.warn("[TELEGRAM] Cannot send: message is null/blank");
-            return;
-        }
-        if (botToken == null || botToken.isBlank()) {
-            log.error("[TELEGRAM] Cannot send: botToken not configured");
             return;
         }
 
@@ -520,15 +524,195 @@ public class TelegramBotService {
      */
     public void sendLowStockNotification(String cameraName, int available) {
         String msg = String.format("""
-            
+
             ⚠️ <b>CẢNH BÁO TỒN KHO THẤP</b>
-            
+
             📷 <b>Sản phẩm:</b> %s
             📦 <b>Còn lại:</b> %d cái
-            
+
             """,
             safeStr(cameraName),
             available
+        );
+
+        sendMessage(msg);
+    }
+
+    // ==================== ORDER STATUS TRANSITION NOTIFICATIONS ====================
+
+    /**
+     * Order transitioned to RENTING (equipment picked up by customer)
+     */
+    public void sendOrderRentingNotification(RentalOrder order) {
+        if (order == null) {
+            log.warn("[TELEGRAM] Cannot send renting notification: order is null");
+            return;
+        }
+
+        User user = order.getUser();
+        String customerName = user != null ? safeStr(user.getFullName()) : "N/A";
+        String customerPhone = user != null ? safeStr(user.getPhone()) : "N/A";
+        String endDate = order.getEndDate() != null ? order.getEndDate().format(D_FORMAT) : "N/A";
+
+        StringBuilder products = new StringBuilder();
+        if (order.getItems() != null && !order.getItems().isEmpty()) {
+            for (RentalOrderItem item : order.getItems()) {
+                String cameraName = item.getCamera() != null ? safeStr(item.getCamera().getName()) : "N/A";
+                int qty = item.getQuantity() != null ? item.getQuantity() : 1;
+                products.append("  • ").append(cameraName).append(" x").append(qty).append("\n");
+            }
+        } else {
+            products.append("  (không có sản phẩm)\n");
+        }
+
+        String msg = String.format("""
+
+            📦 <b>ĐƠN HÀNG ĐANG ĐƯỢC THUÊ</b>
+
+            🆔 <b>Mã đơn:</b> %s
+            👤 <b>Khách hàng:</b> %s
+            📱 <b>SDT:</b> %s
+
+            📷 <b>Thiết bị:</b>
+            %s
+            📅 <b>Ngày trả dự kiến:</b> %s
+            📌 <b>Trạng thái:</b> ĐANG THUÊ
+
+            """,
+            safeStr(order.getOrderCode()),
+            customerName,
+            customerPhone,
+            products.toString().trim(),
+            endDate
+        );
+
+        sendMessage(msg);
+    }
+
+    /**
+     * Order transitioned to RETURNED (equipment returned by customer)
+     */
+    public void sendOrderReturnedNotification(RentalOrder order) {
+        if (order == null) {
+            log.warn("[TELEGRAM] Cannot send returned notification: order is null");
+            return;
+        }
+
+        User user = order.getUser();
+        String customerName = user != null ? safeStr(user.getFullName()) : "N/A";
+        String customerPhone = user != null ? safeStr(user.getPhone()) : "N/A";
+        String totalAmount = formatCurrency(order.getTotalAmount());
+
+        StringBuilder products = new StringBuilder();
+        if (order.getItems() != null && !order.getItems().isEmpty()) {
+            for (RentalOrderItem item : order.getItems()) {
+                String cameraName = item.getCamera() != null ? safeStr(item.getCamera().getName()) : "N/A";
+                int qty = item.getQuantity() != null ? item.getQuantity() : 1;
+                products.append("  • ").append(cameraName).append(" x").append(qty).append("\n");
+            }
+        } else {
+            products.append("  (không có sản phẩm)\n");
+        }
+
+        String msg = String.format("""
+
+            📷 <b>KHÁCH ĐÃ TRẢ THIẾT BỊ</b>
+
+            🆔 <b>Mã đơn:</b> %s
+            👤 <b>Khách hàng:</b> %s
+            📱 <b>SDT:</b> %s
+
+            📷 <b>Thiết bị đã trả:</b>
+            %s
+            💰 <b>Tổng tiền:</b> %s
+            📌 <b>Trạng thái:</b> CHỜ HOÀN TẤT
+
+            """,
+            safeStr(order.getOrderCode()),
+            customerName,
+            customerPhone,
+            products.toString().trim(),
+            totalAmount
+        );
+
+        sendMessage(msg);
+    }
+
+    /**
+     * Order transitioned to COMPLETED (fully finished)
+     */
+    public void sendOrderCompletedNotification(RentalOrder order) {
+        if (order == null) {
+            log.warn("[TELEGRAM] Cannot send completed notification: order is null");
+            return;
+        }
+
+        User user = order.getUser();
+        String customerName = user != null ? safeStr(user.getFullName()) : "N/A";
+        String totalAmount = formatCurrency(order.getTotalAmount());
+
+        StringBuilder products = new StringBuilder();
+        if (order.getItems() != null && !order.getItems().isEmpty()) {
+            for (RentalOrderItem item : order.getItems()) {
+                String cameraName = item.getCamera() != null ? safeStr(item.getCamera().getName()) : "N/A";
+                int qty = item.getQuantity() != null ? item.getQuantity() : 1;
+                products.append("  • ").append(cameraName).append(" x").append(qty).append("\n");
+            }
+        } else {
+            products.append("  (không có sản phẩm)\n");
+        }
+
+        String msg = String.format("""
+
+            ✅ <b>ĐƠN HÀNG ĐÃ HOÀN TẤT</b>
+
+            🆔 <b>Mã đơn:</b> %s
+            👤 <b>Khách hàng:</b> %s
+
+            📷 <b>Thiết bị:</b>
+            %s
+            💰 <b>Tổng tiền:</b> %s
+            📌 <b>Trạng thái:</b> HOÀN TẤT
+            🕒 <b>Thời gian:</b> %s
+
+            """,
+            safeStr(order.getOrderCode()),
+            customerName,
+            products.toString().trim(),
+            totalAmount,
+            now()
+        );
+
+        sendMessage(msg);
+    }
+
+    /**
+     * Order cancelled notification
+     */
+    public void sendOrderCancelledNotification(RentalOrder order, String reason) {
+        if (order == null) {
+            log.warn("[TELEGRAM] Cannot send cancelled notification: order is null");
+            return;
+        }
+
+        User user = order.getUser();
+        String customerName = user != null ? safeStr(user.getFullName()) : "N/A";
+        String reasonText = reason != null && !reason.isBlank() ? reason : "Không xác định";
+
+        String msg = String.format("""
+
+            ❌ <b>ĐƠN HÀNG ĐÃ BỊ HỦY</b>
+
+            🆔 <b>Mã đơn:</b> %s
+            👤 <b>Khách hàng:</b> %s
+            🕒 <b>Thời gian:</b> %s
+            ⚠️ <b>Lý do:</b> %s
+
+            """,
+            safeStr(order.getOrderCode()),
+            customerName,
+            now(),
+            reasonText
         );
 
         sendMessage(msg);

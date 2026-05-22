@@ -220,20 +220,59 @@ public class OrderServiceImpl implements OrderService {
 
         order.setStatus(status);
         RentalOrder saved = orderRepository.save(order);
-        log.info("Order status updated: id={}, code={}, newStatus={}", saved.getId(), saved.getOrderCode(),
-                saved.getStatus());
 
-        if (status == OrderStatus.CONFIRMED && previousStatus == OrderStatus.PENDING) {
-            log.info("Order {} status changing from PENDING to CONFIRMED, triggering Telegram notification...", saved.getId());
-            try {
-                telegramBotService.sendOrderConfirmedNotification(saved);
-                log.debug("Telegram message sent for orderId = {}", saved.getId());
-            } catch (Exception e) {
-                log.error("Failed to send Telegram notification for order {}: {}", saved.getId(), e.getMessage());
-            }
-        }
+        log.info("[ORDER_STATUS] id={}, code={}, oldStatus={}, newStatus={}",
+                saved.getId(), saved.getOrderCode(), previousStatus, saved.getStatus());
+
+        // Fire Telegram notification for each transition — NEVER let Telegram failure affect status update
+        sendOrderStatusNotification(saved, previousStatus, status);
 
         return OrderResponse.fromEntity(saved);
+    }
+
+    /**
+     * Send Telegram notification for status transition.
+     * This method is fire-and-forget: Telegram failures are logged but never thrown.
+     */
+    private void sendOrderStatusNotification(RentalOrder order, OrderStatus oldStatus, OrderStatus newStatus) {
+        try {
+            switch (newStatus) {
+                case CONFIRMED -> {
+                    if (oldStatus == OrderStatus.PENDING) {
+                        log.debug("[ORDER_STATUS] Telegram: sending CONFIRMED notification for order {}", order.getId());
+                        telegramBotService.sendOrderConfirmedNotification(order);
+                        log.info("[ORDER_STATUS] Telegram: CONFIRMED notification sent for order {}", order.getId());
+                    }
+                }
+                case RENTING -> {
+                    log.debug("[ORDER_STATUS] Telegram: sending RENTING notification for order {}", order.getId());
+                    telegramBotService.sendOrderRentingNotification(order);
+                    log.info("[ORDER_STATUS] Telegram: RENTING notification sent for order {}", order.getId());
+                }
+                case RETURNED -> {
+                    log.debug("[ORDER_STATUS] Telegram: sending RETURNED notification for order {}", order.getId());
+                    telegramBotService.sendOrderReturnedNotification(order);
+                    log.info("[ORDER_STATUS] Telegram: RETURNED notification sent for order {}", order.getId());
+                }
+                case COMPLETED -> {
+                    log.debug("[ORDER_STATUS] Telegram: sending COMPLETED notification for order {}", order.getId());
+                    telegramBotService.sendOrderCompletedNotification(order);
+                    log.info("[ORDER_STATUS] Telegram: COMPLETED notification sent for order {}", order.getId());
+                }
+                case CANCELLED -> {
+                    log.debug("[ORDER_STATUS] Telegram: sending CANCELLED notification for order {}", order.getId());
+                    telegramBotService.sendOrderCancelledNotification(order, null);
+                    log.info("[ORDER_STATUS] Telegram: CANCELLED notification sent for order {}", order.getId());
+                }
+                default -> {
+                    log.debug("[ORDER_STATUS] Telegram: no notification configured for transition {} -> {}",
+                            oldStatus, newStatus);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[ORDER_STATUS] Telegram notification failed for order {} (transition {} -> {}): {}",
+                    order.getId(), oldStatus, newStatus, e.getMessage());
+        }
     }
 
     @Override
@@ -249,11 +288,23 @@ public class OrderServiceImpl implements OrderService {
             throw new BadRequestException("Only pending orders can be cancelled");
         }
 
+        OrderStatus previousStatus = order.getStatus();
         restoreStock(order);
         order.setStatus(OrderStatus.CANCELLED);
         RentalOrder saved = orderRepository.save(order);
-        log.info("Order cancelled: id={}, code={}, userId={}", saved.getId(), saved.getOrderCode(),
-                saved.getUser().getId());
+
+        log.info("[ORDER_STATUS] id={}, code={}, oldStatus={}, newStatus={} (cancelled by user)",
+                saved.getId(), saved.getOrderCode(), previousStatus, saved.getStatus());
+
+        // Fire Telegram notification — NEVER let Telegram failure affect cancellation
+        try {
+            telegramBotService.sendOrderCancelledNotification(saved, "Hủy bởi khách hàng");
+            log.info("[ORDER_STATUS] Telegram: CANCELLED notification sent for order {}", saved.getId());
+        } catch (Exception e) {
+            log.warn("[ORDER_STATUS] Telegram notification failed for order {} (cancelled): {}",
+                    saved.getId(), e.getMessage());
+        }
+
         return OrderResponse.fromEntity(saved);
     }
 
