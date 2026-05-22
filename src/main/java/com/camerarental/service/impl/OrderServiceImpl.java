@@ -28,6 +28,9 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -39,6 +42,34 @@ public class OrderServiceImpl implements OrderService {
     private final UserRepository userRepository;
     private final CameraRepository cameraRepository;
     private final TelegramBotService telegramBotService;
+
+    /**
+     * Valid status transitions for order lifecycle.
+     *
+     * Flow: PENDING -> CONFIRMED -> PAID -> RENTING -> RETURNED -> COMPLETED
+     * Any non-terminal status can transition to CANCELLED.
+     *
+     * Note: The PAID status is set automatically by payment services (PayOS, bank transfer, MoMo).
+     * Admin can also manually confirm payment and move CONFIRMED -> PAID.
+     * Admin directly moves PAID -> RENTING (when customer picks up equipment).
+     */
+    private static final Map<OrderStatus, Set<OrderStatus>> VALID_TRANSITIONS = Map.ofEntries(
+            Map.entry(OrderStatus.PENDING, Set.of(OrderStatus.CONFIRMED, OrderStatus.CANCELLED)),
+            Map.entry(OrderStatus.CONFIRMED, Set.of(OrderStatus.PAID, OrderStatus.CANCELLED)),
+            Map.entry(OrderStatus.PAID, Set.of(OrderStatus.RENTING, OrderStatus.CANCELLED)),
+            Map.entry(OrderStatus.RENTING, Set.of(OrderStatus.RETURNED, OrderStatus.CANCELLED)),
+            Map.entry(OrderStatus.RETURNED, Set.of(OrderStatus.COMPLETED)),
+            Map.entry(OrderStatus.COMPLETED, Set.of()),
+            Map.entry(OrderStatus.CANCELLED, Set.of())
+    );
+
+    /**
+     * Terminal statuses that cannot transition to any other status.
+     */
+    private static final Set<OrderStatus> TERMINAL_STATUSES = Set.of(
+            OrderStatus.COMPLETED,
+            OrderStatus.CANCELLED
+    );
 
     @Override
     @Transactional
@@ -176,6 +207,13 @@ public class OrderServiceImpl implements OrderService {
 
         OrderStatus previousStatus = order.getStatus();
 
+        // Validate status transition
+        if (!isValidTransition(previousStatus, status)) {
+            throw new BadRequestException(
+                    String.format("Không thể chuyển từ '%s' sang '%s'. Luồng hợp lệ: PENDING -> CONFIRMED -> PAID -> RENTING -> RETURNED -> COMPLETED (hoặc hủy tại bất kỳ bước nào)",
+                            previousStatus.name(), status.name()));
+        }
+
         if (status == OrderStatus.RETURNED || status == OrderStatus.COMPLETED) {
             restoreStock(order);
         }
@@ -245,5 +283,20 @@ public class OrderServiceImpl implements OrderService {
                 .totalPages(orders.getTotalPages())
                 .last(orders.isLast())
                 .build();
+    }
+
+    /**
+     * Check if a status transition is valid.
+     *
+     * @param from Current status
+     * @param to   Target status
+     * @return true if the transition is allowed
+     */
+    private boolean isValidTransition(OrderStatus from, OrderStatus to) {
+        if (from == to) {
+            return false; // No-op transitions are not allowed
+        }
+        Set<OrderStatus> allowedTargets = VALID_TRANSITIONS.get(from);
+        return allowedTargets != null && allowedTargets.contains(to);
     }
 }

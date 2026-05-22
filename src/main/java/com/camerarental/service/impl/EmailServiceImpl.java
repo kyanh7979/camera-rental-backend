@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
@@ -18,6 +19,7 @@ import java.util.Map;
 public class EmailServiceImpl implements EmailService {
 
     private static final String BREVO_API_URL = "https://api.brevo.com/v3/smtp/email";
+    private static final String BREVO_KEY_PREFIX = "xkeysib-";
 
     private final RestTemplate restTemplate;
 
@@ -36,6 +38,32 @@ public class EmailServiceImpl implements EmailService {
         log.info("[FORGOT_PASSWORD] incoming email: {}", to);
         log.info("[FORGOT_PASSWORD] reset link: {}", resetLink);
         log.info("[FORGOT_PASSWORD] sender: {} <{}>", senderName, senderEmail);
+
+        // Debug: Log Brevo configuration (safe - no full key exposed)
+        log.info("[FORGOT_PASSWORD] BREVO_API_KEY present: {}", brevoApiKey != null && !brevoApiKey.isBlank());
+        if (brevoApiKey != null && !brevoApiKey.isBlank()) {
+            log.info("[FORGOT_PASSWORD] BREVO_API_KEY length: {}", brevoApiKey.length());
+            log.info("[FORGOT_PASSWORD] BREVO_API_KEY prefix: {}", brevoApiKey.substring(0, Math.min(8, brevoApiKey.length())) + "...");
+            log.info("[FORGOT_PASSWORD] BREVO_API_KEY starts with '{}': {}", BREVO_KEY_PREFIX, brevoApiKey.startsWith(BREVO_KEY_PREFIX));
+        } else {
+            log.error("[FORGOT_PASSWORD] BREVO_API_KEY is NULL or BLANK!");
+        }
+
+        // Validate API key before making request
+        if (brevoApiKey == null || brevoApiKey.isBlank()) {
+            log.error("[FORGOT_PASSWORD] BREVO_API_KEY is not configured!");
+            log.error("[FORGOT_PASSWORD] Please set BREVO_API_KEY environment variable on Render");
+            log.error("[FORGOT_PASSWORD] === BREVO EMAIL SERVICE END (CONFIG ERROR) ===");
+            throw new RuntimeException("Brevo API key is not configured. Please set BREVO_API_KEY environment variable.");
+        }
+
+        if (!brevoApiKey.startsWith(BREVO_KEY_PREFIX)) {
+            log.error("[FORGOT_PASSWORD] BREVO_API_KEY format is incorrect!");
+            log.error("[FORGOT_PASSWORD] Expected key to start with '{}', but got: {}", BREVO_KEY_PREFIX, brevoApiKey.substring(0, Math.min(10, brevoApiKey.length())) + "...");
+            log.error("[FORGOT_PASSWORD] Please check your Brevo API key from: https://app.brevo.com/settings/keys/api");
+            log.error("[FORGOT_PASSWORD] === BREVO EMAIL SERVICE END (KEY FORMAT ERROR) ===");
+            throw new RuntimeException("Brevo API key format is incorrect. Expected key to start with '" + BREVO_KEY_PREFIX + "'. Please check your BREVO_API_KEY.");
+        }
 
         try {
             // Build Brevo API request body
@@ -61,10 +89,14 @@ public class EmailServiceImpl implements EmailService {
             log.info("[FORGOT_PASSWORD] Sending request to Brevo API...");
             log.info("[FORGOT_PASSWORD] API endpoint: {}", BREVO_API_URL);
 
-            // Set headers
+            // Set headers - Brevo uses 'api-key' header (NOT Authorization Bearer)
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.setAccept(MediaType.parseMediaTypes("application/json"));
             headers.set("api-key", brevoApiKey);
+
+            log.info("[FORGOT_PASSWORD] Request headers: Content-Type={}, Accept={}, api-key=***",
+                    headers.getContentType(), headers.getAccept());
 
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
 
@@ -87,6 +119,16 @@ public class EmailServiceImpl implements EmailService {
                 throw new RuntimeException("Failed to send email via Brevo API. Status: " + response.getStatusCode());
             }
 
+        } catch (HttpClientErrorException e) {
+            log.error("[FORGOT_PASSWORD] HttpClientErrorException - HTTP {} while sending to: {}", e.getStatusCode(), to);
+            log.error("[FORGOT_PASSWORD] Response body: {}", e.getResponseBodyAsString());
+            log.error("[FORGOT_PASSWORD] Error message: {}", e.getMessage());
+            if (e.getStatusCode().value() == 401) {
+                log.error("[FORGOT_PASSWORD] 401 Unauthorized - Check BREVO_API_KEY validity!");
+                log.error("[FORGOT_PASSWORD] Get new API key from: https://app.brevo.com/settings/keys/api");
+            }
+            log.error("[FORGOT_PASSWORD] === BREVO EMAIL SERVICE END (HTTP ERROR) ===");
+            throw new RuntimeException("Failed to send email via Brevo API. HTTP " + e.getStatusCode() + ": " + e.getResponseBodyAsString(), e);
         } catch (RestClientException e) {
             log.error("[FORGOT_PASSWORD] RestClientException while sending to: {}", to, e);
             log.error("[FORGOT_PASSWORD] Error message: {}", e.getMessage());
