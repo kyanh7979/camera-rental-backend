@@ -53,6 +53,25 @@ public interface RentalOrderRepository extends JpaRepository<RentalOrder, Long> 
     long countActiveOrdersByCameraId(@Param("cameraId") Long cameraId, @Param("statuses") List<OrderStatus> statuses);
 
     /**
+     * Search orders by keyword across multiple fields: id, orderCode, user info.
+     */
+    @Query("""
+            SELECT DISTINCT ro FROM RentalOrder ro
+            LEFT JOIN FETCH ro.user
+            LEFT JOIN FETCH ro.items ri
+            LEFT JOIN FETCH ri.camera
+            WHERE (:keyword IS NULL OR :keyword = ''
+                OR LOWER(ro.orderCode) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                OR CAST(ro.id AS string) LIKE CONCAT('%', :keyword, '%')
+                OR LOWER(ro.user.fullName) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                OR LOWER(ro.user.email) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                OR LOWER(ro.user.phone) LIKE LOWER(CONCAT('%', :keyword, '%'))
+            )
+            ORDER BY ro.createdAt DESC
+            """)
+    Page<RentalOrder> searchOrders(@Param("keyword") String keyword, Pageable pageable);
+
+    /**
      * Get all orders linked to a camera with their statuses (for delete decision).
      * Returns: [orderId, orderCode, status]
      */

@@ -23,12 +23,15 @@ public class RentalController {
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<PagedResponse<OrderResponse>>> getAllRentals(
             @RequestParam(required = false) String status,
+            @RequestParam(required = false) String keyword,
             @RequestParam(defaultValue = AppConstants.DEFAULT_PAGE_NUMBER) int page,
             @RequestParam(defaultValue = AppConstants.DEFAULT_PAGE_SIZE) int size) {
 
         OrderStatus orderStatus = convertStatus(status);
 
-        PagedResponse<OrderResponse> response = orderService.getAllOrders(orderStatus, page, size);
+        log.info("[ADMIN_ORDERS_SEARCH] status={}, keyword={}, page={}, size={}", status, keyword, page, size);
+
+        PagedResponse<OrderResponse> response = orderService.getAllOrders(orderStatus, page, size, keyword);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 

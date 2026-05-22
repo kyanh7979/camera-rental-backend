@@ -187,10 +187,37 @@ public class OrderServiceImpl implements OrderService {
     @Override
     @Transactional(readOnly = true)
     public PagedResponse<OrderResponse> getAllOrders(OrderStatus status, int page, int size) {
+        return getAllOrders(status, page, size, null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PagedResponse<OrderResponse> getAllOrders(OrderStatus status, int page, int size, String keyword) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
 
         Page<RentalOrder> orders;
-        if (status != null) {
+
+        if (keyword != null && !keyword.isBlank()) {
+            log.info("[ADMIN_ORDERS_SEARCH] keyword={}, page={}, size={}", keyword, page, size);
+            orders = orderRepository.searchOrders(keyword, pageable);
+
+            // Log debug info
+            log.info("[ADMIN_ORDERS_SEARCH] totalOrders={}, matchedOrders={}, sampleOrderCodes={}",
+                    orders.getTotalElements(),
+                    orders.getNumberOfElements(),
+                    orders.getContent().stream().limit(5).map(RentalOrder::getOrderCode).toList());
+
+            // Apply status filter post-search if needed
+            if (status != null) {
+                orders = new org.springframework.data.domain.PageImpl<>(
+                        orders.getContent().stream()
+                                .filter(o -> o.getStatus() == status)
+                                .toList(),
+                        pageable,
+                        orders.getTotalElements()
+                );
+            }
+        } else if (status != null) {
             orders = orderRepository.findByStatus(status, pageable);
         } else {
             orders = orderRepository.findAll(pageable);
