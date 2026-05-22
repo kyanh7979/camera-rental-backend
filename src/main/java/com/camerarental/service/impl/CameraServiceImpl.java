@@ -375,11 +375,11 @@ public class CameraServiceImpl implements CameraService {
             OrderStatus.PENDING,
             OrderStatus.CONFIRMED,
             OrderStatus.PAID,
-            OrderStatus.RENTING,
-            OrderStatus.RETURNED
+            OrderStatus.RENTING
     );
 
     private static final List<OrderStatus> TERMINAL_STATUSES = List.of(
+            OrderStatus.RETURNED,
             OrderStatus.COMPLETED,
             OrderStatus.CANCELLED
     );
@@ -453,7 +453,6 @@ public class CameraServiceImpl implements CameraService {
             long confirmed = blockingOrders.stream().filter(o -> o[2] == OrderStatus.CONFIRMED).count();
             long paid = blockingOrders.stream().filter(o -> o[2] == OrderStatus.PAID).count();
             long renting = blockingOrders.stream().filter(o -> o[2] == OrderStatus.RENTING).count();
-            long returned = blockingOrders.stream().filter(o -> o[2] == OrderStatus.RETURNED).count();
 
             StringBuilder msg = new StringBuilder();
             msg.append("Không thể xóa sản phẩm vì có ").append(blockingOrders.size())
@@ -463,10 +462,6 @@ public class CameraServiceImpl implements CameraService {
             if (confirmed > 0) msg.append("- ").append(confirmed).append(" đơn Đã xác nhận (CONFIRMED)\n");
             if (paid > 0) msg.append("- ").append(paid).append(" đơn Đã thanh toán (PAID)\n");
             if (renting > 0) msg.append("- ").append(renting).append(" đơn Đang thuê (RENTING)\n");
-            if (returned > 0) {
-                msg.append("- ").append(returned)
-                        .append(" đơn Đã trả (RETURNED) - cần hoàn tất đơn trước\n");
-            }
             msg.append("Vui lòng xử lý các đơn trên trước.");
 
             throw new BadRequestException(msg.toString());
